@@ -198,3 +198,5 @@ def build_analysis_prompt(extra=None):
     {{"label": "排水勾配確保見込み", "status": "ok|warn|ng", "note": ""}}
   ]
 }}"""
+u p d a t e d  
+ 
