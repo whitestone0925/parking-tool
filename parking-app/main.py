@@ -11,7 +11,9 @@ import re
 from typing import Optional
 
 app = FastAPI(title="コインパーキング営業支援ツール")
-templates = Jinja2Templates(directory="templates")
+import os as _os
+_base = _os.path.dirname(_os.path.abspath(__file__))
+templates = Jinja2Templates(directory=_os.path.join(_base, "templates"))
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
