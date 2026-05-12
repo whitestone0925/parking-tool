@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>コインパーキング営業支援ツール</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #1D9E75; --green-dark: #0F6E56; --green-light: #E1F5EE;
+    --amber: #BA7517; --amber-light: #FAEEDA;
+    --red: #E24B4A; --red-light: #FCEBEB;
+    --gray-100: #f8f9fa; --gray-200: #e9ecef; --gray-400: #adb5bd;
+    --gray-600: #6c757d; --gray-800: #343a40;
+    --border: #dee2e6; --radius: 10px; --radius-sm: 6px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; color: var(--gray-800); min-height: 100vh; }
+
+  .header { background: #fff; border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
+  .header-icon { width: 32px; height: 32px; background: var(--green); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; }
+  .header h1 { font-size: 15px; font-weight: 600; color: var(--gray-800); }
+  .header-sub { font-size: 12px; color: var(--gray-600); margin-left: 4px; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+
+  .stepper { display: flex; align-items: center; margin-bottom: 24px; background: #fff; border-radius: var(--radius); padding: 16px 20px; border: 1px solid var(--border); }
+  .step { display: flex; align-items: center; gap: 8px; flex: 1; cursor: pointer; }
+  .step-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--gray-400); flex-shrink: 0; transition: all 0.2s; }
+  .step-circle.active { background: var(--green); border-color: var(--green); color: #fff; }
+  .step-circle.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .step-label { font-size: 12px; color: var(--gray-400); white-space: nowrap; }
+  .step-label.active { color: var(--green-dark); font-weight: 600; }
+  .step-connector { flex: 1; height: 2px; background: var(--border); margin: 0 6px; transition: background 0.3s; }
+  .step-connector.done { background: var(--green); }
+
+  .card { background: #fff; border-radius: var(--radius); border: 1px solid var(--border); padding: 20px 24px; margin-bottom: 16px; }
+  .card-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .card-title .icon { color: var(--green); font-size: 18px; }
+
+  .upload-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--gray-100); }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--green); background: var(--green-light); }
+  .upload-zone.has-file { border-color: var(--green); background: var(--green-light); }
+  .upload-zone .uf-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+  .upload-zone h3 { font-size: 14px; margin-bottom: 4px; }
+  .upload-zone p { font-size: 12px; color: var(--gray-600); }
+  #fileInput { display: none; }
+
+  .preview-img { width: 100%; max-height: 260px; object-fit: contain; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-top: 12px; display: none; }
+
+  .manual-inputs { margin-top: 16px; padding: 16px; background: var(--gray-100); border-radius: var(--radius-sm); }
+  .manual-inputs h4 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12px; color: var(--gray-600); font-weight: 500; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: #fff; }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--green); }
+
+  .status-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; margin-top: 12px; }
+  .status-bar.idle { background: var(--gray-100); color: var(--gray-600); }
+  .status-bar.running { background: var(--green-light); color: var(--green-dark); }
+  .status-bar.done { background: var(--green-light); color: var(--green-dark); }
+  .status-bar.error { background: var(--red-light); color: var(--red); }
+  .spinner { width: 14px; height: 14px; border: 2px solid #9FE1CB; border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress-track { height: 4px; background: var(--gray-200); border-radius: 2px; margin: 8px 0; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 2px; width: 0; transition: width 0.4s ease; }
+
+  .btn { padding: 10px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--green); color: #fff; }
+  .btn-primary:hover { background: var(--green-dark); }
+  .btn-primary:disabled { background: var(--gray-400); cursor: not-allowed; }
+  .btn-secondary { background: var(--gray-100); color: var(--gray-800); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--gray-200); }
+  .btn-row { display: flex; gap: 10px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .metric { background: var(--gray-100); border-radius: var(--radius-sm); padding: 10px 14px; }
+  .metric-label { font-size: 11px; color: var(--gray-600); margin-bottom: 3px; }
+  .metric-value { font-size: 22px; font-weight: 700; color: var(--gray-800); }
+  .metric-unit { font-size: 11px; color: var(--gray-600); }
+  .metric.highlight .metric-value { color: var(--green); }
+
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 16px; }
+  .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--gray-600); border-bottom: 2px solid transparent; margin-bottom: -2px; font-weight: 500; }
+  .tab.active { color: var(--green-dark); border-bottom-color: var(--green); }
+
+  .evidence-box { background: var(--green-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 12px; font-size: 13px; line-height: 1.7; color: var(--green-dark); }
+  .evidence-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+
+  .warn-box { background: var(--amber-light); border-left: 3px solid var(--amber); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 10px; font-size: 13px; color: var(--amber); }
+
+  .check-list { margin-top: 4px; }
+  .check-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--gray-200); font-size: 13px; }
+  .check-item:last-child { border-bottom: none; }
+  .check-badge { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; margin-top: 1px; }
+  .check-badge.ok { background: var(--green-light); color: var(--green); }
+  .check-badge.warn { background: var(--amber-light); color: var(--amber); }
+  .check-badge.ng { background: var(--red-light); color: var(--red); }
+
+  .conf-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-weight: 600; margin-left: 4px; }
+  .conf-badge.high { background: var(--green-light); color: var(--green-dark); }
+  .conf-badge.mid { background: var(--amber-light); color: var(--amber); }
+  .conf-badge.low { background: var(--red-light); color: var(--red); }
+
+  .chip { display: inline-flex; padding: 5px 12px; border-radius: 20px; font-size: 12px; border: 1px solid var(--border); cursor: pointer; background: #fff; color: var(--gray-600); transition: all 0.15s; margin: 3px; }
+  .chip:hover { border-color: var(--green); color: var(--green-dark); background: var(--green-light); }
+
+  .income-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  .income-table th { font-size: 11px; color: var(--gray-600); text-align: left; padding: 6px 10px; border-bottom: 2px solid var(--border); }
+  .income-table td { padding: 9px 10px; border-bottom: 1px solid var(--gray-200); }
+  .income-table tr:last-child td { font-weight: 700; border-bottom: none; background: var(--gray-100); }
+  .income-table .pos { color: var(--green); }
+  .income-table .neg { color: var(--red); }
+
+  .profit-highlight { background: var(--green-light); border-radius: var(--radius-sm); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .profit-main { font-size: 28px; font-weight: 700; color: var(--green-dark); }
+  .profit-label { font-size: 12px; color: var(--green-dark); margin-bottom: 2px; }
+
+  .slide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; margin-top: 12px; }
+  .slide-card { background: var(--gray-100); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 14px; }
+  .slide-num { background: var(--green); color: #fff; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 8px; }
+  .slide-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .slide-headline { font-size: 12px; color: var(--green-dark); font-weight: 600; margin-bottom: 4px; }
+  .slide-body { font-size: 12px; color: var(--gray-600); line-height: 1.6; }
+  .slide-numbers { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+  .slide-num-badge { background: var(--green-light); color: var(--green-dark); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+
+  section { display: none; }
+  section.active { display: block; }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .form-grid.three { grid-template-columns: 1fr 1fr; }
+    .step-label { display: none; }
+    .metrics-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-icon">🅿</div>
+  <h1>コインパーキング営業支援ツール</h1>
+  <span class="header-sub">図面解析 → 相場調査 → 収支試算 → 提案資料</span>
+</header>
+
+<div class="container">
+
+  <!-- ステッパー -->
+  <div class="stepper" id="stepper">
+    <div class="step" onclick="tryGoStep(1)">
+      <div class="step-circle active" id="sc1">1</div>
+      <div class="step-label active" id="sl1">図面解析</div>
+    </div>
+    <div class="step-connector" id="conn1"></div>
+    <div class="step" onclick="tryGoStep(2)">
+      <div class="step-circle" id="sc2">2</div>
+      <div class="step-label" id="sl2">レイアウト</div>
+    </div>
+    <div class="step-connector" id="conn2"></div>
+    <div class="step" onclick="tryGoStep(3)">
+      <div class="step-circle" id="sc3">3</div>
+      <div class="step-label" id="sl3">相場調査</div>
+    </div>
+    <div class="step-connector" id="conn3"></div>
+    <div class="step" onclick="tryGoStep(4)">
+      <div class="step-circle" id="sc4">4</div>
+      <div class="step-label" id="sl4">収支試算</div>
+    </div>
+    <div class="step-connector" id="conn4"></div>
+    <div class="step" onclick="tryGoStep(5)">
+      <div class="step-circle" id="sc5">5</div>
+      <div class="step-label" id="sl5">提案資料</div>
+    </div>
+  </div>
+
+  <!-- STEP 1: 図面アップロード -->
+  <section id="step1" class="active">
+    <div class="card">
+      <div class="card-title"><span class="icon">📐</span>土地図面のアップロード</div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <span class="uf-icon" id="ufIcon">📄</span>
+        <h3 id="ufTitle">図面・測量図・公図をアップロード</h3>
+        <p id="ufSub">PNG / JPG / PDF　ドラッグ＆ドロップ可</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*,.pdf">
+      <img id="previewImg" class="preview-img" alt="図面プレビュー">
+
+      <div class="manual-inputs">
+        <h4>または土地情報を直接入力</h4>
+        <div class="form-grid" style="margin-top:10px">
+          <div class="field"><label>土地面積（㎡）</label><input type="number" id="landArea" value="300" placeholder="例: 300"></div>
+          <div class="field"><label>所在地</label><input type="text" id="address" placeholder="例: 東京都渋谷区〇〇"></div>
+          <div class="field"><label>土地形状</label>
+            <select id="landShape">
+              <option value="rect">長方形・正方形</option>
+              <option value="l">L字型</option>
+              <option value="flag">旗竿地</option>
+              <option value="triangle">三角形</option>
+              <option value="irreg">不整形</option>
+            </select>
+          </div>
+          <div class="field"><label>接道方向</label>
+            <select id="roadDir">
+              <option value="1">1方向（片側接道）</option>
+              <option value="2">2方向（角地）</option>
+              <option value="3">3方向以上</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="status-bar idle" id="s1bar" style="display:none">
+        <div class="spinner" id="s1spin" style="display:none"></div>
+        <span id="s1txt"></span>
+      </div>
+      <div class="progress-track" id="s1prog" style="display:none"><div class="progress-fill" id="s1fill"></div></div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnAnalyze" onclick="runAnalysis()">🔍 AI解析を実行</button>
+        <button class="btn btn-secondary" onclick="runDemo()">📋 デモデータで試す</button>
+      </div>
+
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:0" id="reChips" style="display:none">
+        <div class="chip" onclick="reAnalyze('障害物（柱・設備）を詳しく検出してください')">🔎 障害物を詳細検出</div>
+        <div class="chip" onclick="reAnalyze('寸法・縮尺を読み取り正確な面積を計算してください')">📏 寸法・縮尺を精読</div>
+        <div class="chip" onclick="reAnalyze('最大台数を優先したレイアウトで再提案してください')">🚗 最大台数で再提案</div>
+        <div class="chip" onclick="reAnalyze('バリアフリー対応スペースを含めて提案してください')">♿ バリアフリー対応</div>
+      </div>
+    </div>
+
+    <!-- 解析結果 -->
+    <div class="card" id="analysisResult" style="display:none">
+      <div class="card-title"><span class="icon">✅</span>図面解析結果</div>
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('summary',this,'res')">サマリー</div>
+        <div class="tab" onclick="switchTab('detail',this,'res')">詳細データ</div>
+        <div class="tab" onclick="switchTab('check',this,'res')">適地チェック</div>
+      </div>
+      <div id="resTabSummary">
+        <div class="metrics-grid" id="resMetrics"></div>
+        <div class="evidence-box"><div class="evidence-title">🔍 AI解析の根拠</div><div id="resEvidence"></div></div>
+        <div class="warn-box" id="resWarn" style="display:none"></div>
+      </div>
+      <div id="resTabDetail" style="display:none">
+        <div class="form-grid" style="margin-top:4px">
+          <div class="field"><label>土地面積（㎡）<span class="conf-badge" id="cfArea"></span></label><input type="number" id="rfArea"></div>
+          <div class="field"><label>有効面積（㎡）<span class="conf-badge" id="cfEff"></span></label><input type="number" id="rfEff"></div>
+          <div class="field"><label>接道幅員（m）<span class="conf-badge" id="cfRoad"></span></label><input type="number" id="rfRoad" step="0.1"></div>
+          <div class="field"><label>接道方向数<span class="conf-badge" id="cfDir"></span></label><select id="rfDir"><option value="1">1方向</option><option value="2">2方向（角地）</option><option value="3">3方向以上</option></select></div>
+          <div class="field"><label>土地形状<span class="conf-badge" id="cfShape"></span></label><select id="rfShape"><option value="rect">長方形</option><option value="l">L字型</option><option value="flag">旗竿地</option><option value="triangle">三角形</option><option value="irreg">不整形</option></select></div>
+          <div class="field"><label>推奨台数<span class="conf-badge" id="cfSlots"></span></label><input type="number" id="rfSlots"></div>
+          <div class="field"><label>最大台数<span class="conf-badge" id="cfMax"></span></label><input type="number" id="rfMax"></div>
+          <div class="field"><label>1台あたり（㎡）<span class="conf-badge" id="cfPer"></span></label><input type="number" id="rfPer" step="0.1"></div>
+        </div>
+        <div class="field" style="margin-top:10px"><label>障害物・制約<span class="conf-badge" id="cfObs"></span></label><input type="text" id="rfObs"></div>
+      </div>
+      <div id="resTabCheck" style="display:none">
+        <div class="check-list" id="resChecks"></div>
+      </div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn btn-primary" onclick="goStep(2)">次へ：レイアウト確認 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: レイアウト確認 -->
+  <section id="step2">
+    <div class="card">
+      <div class="card-title"><span class="icon">🗺</span>レイアウト計画</div>
+      <canvas id="lotCanvas" style="width:100%;border-radius:8px;border:1px solid var(--border);display:block"></canvas>
+      <div class="metrics-grid" style="margin-top:14px" id="layoutMetrics"></div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep(1)">← 戻る</button>
+        <button class="btn btn-primary" onclick="runMarket()">📊 周辺相場を調査 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: 相場調査 -->
+  <section id="step3">
+    <div class="card">
+      <div class="card-title"><span class="icon">📊</span>周辺相場調査</div>
+      <div class="status-bar running" id="s3bar" style="display:none"><div class="spinner"></div><span id="s3txt">調査中...</span></div>
+      <div class="progress-track" id="s3prog" style="display:none"><div class="progress-fill" id="s3fill"></div></div>
+      <div id="marketResult" style="display:none">
+        <div class="metrics-grid" id="marketMetrics"></div>
+        <div class="evidence-box" style="margin-top:12px" id="marketSummary"></div>
+        <table class="income-table" style="margin-top:16px">
+          <thead><tr><th>時間帯</th><th>相場（円/30分）</th></tr></thead>
+          <tbody id="rateTable"></tbody>
+        </table>
+        <div style="margin-top:12px">
+          <label style="font-size:13px;font-weight:600">推奨料金を調整（円/30分）</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+            <input type="range" id="rateSlider" min="100" max="600" step="10" style="flex:1">
+            <span style="font-size:20px;font-weight:700;color:var(--green);min-width:80px" id="rateDisplay">200円</span>
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep(2)">← 戻る</button>
+        <button class="btn btn-primary" id="btnFinance" onclick="runFinance()" disabled>💹 収支を試算 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 4: 収支試算 -->
+  <section id="step4">
+    <div class="card">
+      <div class="card-title"><span class="icon">💹</span>収支試算</div>
+      <div class="status-bar running" id="s4bar" style="display:none"><div class="spinner"></div><span id="s4txt">計算中...</span></div>
+      <div class="progress-track" id="s4prog" style="display:none"><div class="progress-fill" id="s4fill"></div></div>
+      <div id="financeResult" style="display:none">
+        <div class="profit-highlight">
+          <div><div class="profit-label">月間純利益（稼働率70%想定）</div><div class="profit-main" id="profitMain">—</div></div>
+          <div style="text-align:right"><div class="profit-label">年間純利益</div><div style="font-size:20px;font-weight:700;color:var(--green-dark)" id="profitYear">—</div></div>
+        </div>
+        <table class="income-table">
+          <thead><tr><th>項目</th><th style="text-align:right">月次</th><th style="text-align:right">年次</th></tr></thead>
+          <tbody id="financeBody"></tbody>
+        </table>
+        <div class="metrics-grid" style="margin-top:14px" id="financeMetrics"></div>
+        <div class="evidence-box" style="margin-top:12px" id="financeComment"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep(3)">← 戻る</button>
+        <button class="btn btn-primary" id="btnProposal" onclick="runProposal()" disabled>📄 提案資料を作成 →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 5: 提案資料 -->
+  <section id="step5">
+    <div class="card">
+      <div class="card-title"><span class="icon">📄</span>営業提案資料</div>
+      <div class="status-bar running" id="s5bar" style="display:none"><div class="spinner"></div><span id="s5txt">作成中...</span></div>
+      <div class="progress-track" id="s5prog" style="display:none"><div class="progress-fill" id="s5fill"></div></div>
+      <div id="proposalResult" style="display:none">
+        <div class="slide-grid" id="slideGrid"></div>
+        <div class="btn-row" style="margin-top:20px">
+          <a href="/api/export-pptx" class="btn btn-primary" id="btnExport" style="text-decoration:none">⬇ PowerPointで出力</a>
+          <button class="btn btn-secondary" onclick="window.print()">🖨 印刷</button>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-secondary" onclick="goStep(4)">← 戻る</button>
+        <button class="btn btn-secondary" onclick="resetAll()">🔄 最初からやり直す</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+let state = { currentStep: 1, completedSteps: new Set(), analysisData: null, marketData: null, financeData: null };
+
+// ---- ファイルアップロード ----
+const zone = document.getElementById('uploadZone');
+const fi = document.getElementById('fileInput');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0]); });
+fi.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
+
+function setFile(file) {
+  state.uploadedFile = file;
+  zone.classList.add('has-file');
+  document.getElementById('ufIcon').textContent = '✅';
+  document.getElementById('ufTitle').textContent = file.name;
+  document.getElementById('ufSub').textContent = (file.size / 1024).toFixed(0) + ' KB — 解析ボタンで開始';
+  if (file.type.startsWith('image/')) {
+    const img = document.getElementById('previewImg');
+    img.src = URL.createObjectURL(file);
+    img.style.display = 'block';
+  }
+  setStatus('s1', 'idle', '📁 ファイル読み込み完了');
+}
+
+// ---- API呼び出し汎用 ----
+async function apiPost(url, formDataOrObj) {
+  const isForm = formDataOrObj instanceof FormData;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: isForm ? {} : { 'Content-Type': 'application/json' },
+    body: isForm ? formDataOrObj : JSON.stringify(formDataOrObj)
+  });
+  if (!res.ok) { const err = await res.json(); throw new Error(err.detail || 'APIエラー'); }
+  return res.json();
+}
+
+function setStatus(prefix, type, msg) {
+  const bar = document.getElementById(prefix + 'bar');
+  const prog = document.getElementById(prefix + 'prog');
+  if (!bar) return;
+  bar.style.display = 'flex';
+  bar.className = 'status-bar ' + type;
+  const spin = bar.querySelector('.spinner');
+  if (spin) spin.style.display = type === 'running' ? 'block' : 'none';
+  const txt = document.getElementById(prefix + 'txt');
+  if (txt) txt.textContent = msg;
+  if (prog) prog.style.display = 'block';
+}
+
+function setProgress(prefix, pct) {
+  const fill = document.getElementById(prefix + 'fill');
+  if (fill) fill.style.width = pct + '%';
+  if (pct >= 100) setTimeout(() => { const p = document.getElementById(prefix + 'prog'); if(p) p.style.display='none'; }, 700);
+}
+
+// ---- STEP 1: 解析 ----
+async function runAnalysis() {
+  setStatus('s1', 'running', 'AIが図面を解析中...');
+  setProgress('s1', 15);
+  const fd = new FormData();
+  if (state.uploadedFile) fd.append('file', state.uploadedFile);
+  else fd.append('demo', 'true');
+  try {
+    setProgress('s1', 40);
+    const res = await apiPost('/api/analyze-floorplan', fd);
+    setProgress('s1', 100);
+    if (res.success) { renderAnalysis(res.data); setStatus('s1', 'done', '✅ 解析完了'); document.getElementById('reChips').style.display = 'flex'; }
+    else throw new Error(res.error);
+  } catch (e) { setStatus('s1', 'error', '❌ ' + e.message); setProgress('s1', 0); }
+}
+
+async function runDemo() {
+  state.uploadedFile = null;
+  setStatus('s1', 'running', 'デモデータで解析中...');
+  setProgress('s1', 20);
+  const fd = new FormData();
+  fd.append('demo', 'true');
+  try {
+    const res = await apiPost('/api/analyze-floorplan', fd);
+    setProgress('s1', 100);
+    if (res.success) { renderAnalysis(res.data); setStatus('s1', 'done', '✅ デモ解析完了'); document.getElementById('reChips').style.display = 'flex'; }
+    else throw new Error(res.error);
+  } catch (e) { setStatus('s1', 'error', '❌ ' + e.message); }
+}
+
+async function reAnalyze(instruction) {
+  setStatus('s1', 'running', '再解析中: ' + instruction);
+  setProgress('s1', 20);
+  const fd = new FormData();
+  if (state.uploadedFile) fd.append('file', state.uploadedFile);
+  else fd.append('demo', 'true');
+  fd.append('extra_instruction', instruction);
+  try {
+    const res = await apiPost('/api/analyze-floorplan', fd);
+    setProgress('s1', 100);
+    if (res.success) { renderAnalysis(res.data); setStatus('s1', 'done', '✅ 再解析完了'); }
+    else throw new Error(res.error);
+  } catch (e) { setStatus('s1', 'error', '❌ ' + e.message); }
+}
+
+function renderAnalysis(d) {
+  state.analysisData = d;
+  const cf = d.confidence || {};
+  const confHtml = v => `<span class="conf-badge ${v}">${v==='high'?'高':v==='mid'?'中':'低'}</span>`;
+
+  document.getElementById('resMetrics').innerHTML = `
+    <div class="metric highlight"><div class="metric-label">推奨台数</div><div class="metric-value">${d.slots_recommended||'—'}<span class="metric-unit"> 台</span></div></div>
+    <div class="metric"><div class="metric-label">最大台数</div><div class="metric-value">${d.slots_max||'—'}<span class="metric-unit"> 台</span></div></div>
+    <div class="metric"><div class="metric-label">土地面積</div><div class="metric-value">${d.area_total||'—'}<span class="metric-unit"> ㎡</span></div></div>
+    <div class="metric"><div class="metric-label">有効面積</div><div class="metric-value">${d.area_effective||'—'}<span class="metric-unit"> ㎡</span></div></div>
+    <div class="metric"><div class="metric-label">接道幅員</div><div class="metric-value">${d.road_width||'—'}<span class="metric-unit"> m</span></div></div>
+    <div class="metric"><div class="metric-label">1台あたり</div><div class="metric-value">${d.sqm_per_slot||'—'}<span class="metric-unit"> ㎡</span></div></div>
+  `;
+  document.getElementById('resEvidence').textContent = d.evidence || '';
+  const w = document.getElementById('resWarn');
+  if (d.warnings) { w.style.display='block'; w.textContent = '⚠ ' + d.warnings; } else { w.style.display='none'; }
+
+  const sv = (id, val) => { const e=document.getElementById(id); if(e&&val!==undefined) e.value=val; };
+  sv('rfArea',d.area_total); sv('rfEff',d.area_effective); sv('rfRoad',d.road_width);
+  sv('rfDir',d.road_directions); sv('rfShape',d.shape); sv('rfSlots',d.slots_recommended);
+  sv('rfMax',d.slots_max); sv('rfPer',d.sqm_per_slot); sv('rfObs',d.obstacles);
+
+  const sc = (id, key) => { const e=document.getElementById(id); if(e&&cf[key]){e.innerHTML=confHtml(cf[key]);} };
+  sc('cfArea','area'); sc('cfEff','area'); sc('cfRoad','road'); sc('cfDir','road');
+  sc('cfShape','shape'); sc('cfSlots','slots'); sc('cfMax','slots'); sc('cfPer','slots'); sc('cfObs','obstacles');
+
+  if (d.checks) {
+    document.getElementById('resChecks').innerHTML = d.checks.map(c => `
+      <div class="check-item">
+        <div class="check-badge ${c.status}">${c.status==='ok'?'✓':c.status==='warn'?'!':'✗'}</div>
+        <div><div style="font-weight:500">${c.label}</div>${c.note?`<div style="font-size:12px;color:var(--gray-600);margin-top:2px">${c.note}</div>`:''}</div>
+      </div>`).join('');
+  }
+
+  document.getElementById('analysisResult').style.display = 'block';
+  state.completedSteps.add(1);
+  drawLot(d.slots_recommended, d.shape);
+}
+
+// ---- STEP 2: レイアウト図描画 ----
+function drawLot(slots, shape) {
+  const canvas = document.getElementById('lotCanvas');
+  const W = canvas.parentElement.clientWidth - 48;
+  canvas.width = W; canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#f0fdf8'; ctx.fillRect(0, 0, W, 200);
+  ctx.strokeStyle = '#9FE1CB'; ctx.lineWidth = 1.5; ctx.setLineDash([6,4]);
+  ctx.strokeRect(6, 6, W-12, 188); ctx.setLineDash([]);
+
+  slots = slots || 8;
+  const cols = Math.ceil(Math.sqrt(slots * 1.5));
+  const rows = Math.ceil(slots / cols);
+  const padX = 20, padY = 20;
+  const slotW = Math.min(72, (W - padX*2) / cols - 5);
+  const slotH = Math.min(44, (188 - padY*2 - 20) / rows - 5);
+  let count = 0;
+  for (let r = 0; r < rows && count < slots; r++) {
+    for (let c = 0; c < cols && count < slots; c++) {
+      const x = padX + c * (slotW + 5), y = padY + r * (slotH + 5);
+      ctx.fillStyle = '#5DCAA5'; ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.roundRect(x, y, slotW, slotH, 3); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#085041'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(count + 1, x + slotW / 2, y + slotH / 2 + 4);
+      count++;
+    }
+  }
+  ctx.fillStyle = '#FAC775'; ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.roundRect(W-40, 80, 28, 34, 3); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.fillStyle = '#633806'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('精算機', W-26, 101);
+  ctx.fillStyle = '#0F6E56'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`推奨 ${slots} 台レイアウト`, W/2, 192);
+
+  document.getElementById('layoutMetrics').innerHTML = `
+    <div class="metric highlight"><div class="metric-label">推奨台数</div><div class="metric-value">${slots}<span class="metric-unit"> 台</span></div></div>
+    <div class="metric"><div class="metric-label">土地面積</div><div class="metric-value">${state.analysisData?.area_total||'—'}<span class="metric-unit"> ㎡</span></div></div>
+    <div class="metric"><div class="metric-label">1台あたり</div><div class="metric-value">${state.analysisData?.sqm_per_slot||'—'}<span class="metric-unit"> ㎡</span></div></div>
+    <div class="metric"><div class="metric-label">レイアウト</div><div class="metric-value" style="font-size:14px">${{parallel:'並列',vertical:'縦列',angle:'斜め',mixed:'混合'}[state.analysisData?.layout_type]||'並列'}</div></div>
+  `;
+}
+
+// ---- STEP 3: 相場調査 ----
+async function runMarket() {
+  goStep(3);
+  setStatus('s3', 'running', '周辺相場を調査中...');
+  setProgress('s3', 20);
+  const d = state.analysisData || {};
+  const address = document.getElementById('address').value || '東京都内';
+  try {
+    const res = await apiPost('/api/market-research', {
+      address, area: d.area_total || parseInt(document.getElementById('landArea').value) || 300,
+      slots: d.slots_recommended || 8
+    });
+    setProgress('s3', 100);
+    if (res.success) { renderMarket(res.data); document.getElementById('btnFinance').disabled = false; }
+    else throw new Error(res.error);
+  } catch(e) { setStatus('s3', 'error', '❌ ' + e.message); }
+}
+
+function renderMarket(d) {
+  state.marketData = d;
+  document.getElementById('marketResult').style.display = 'block';
+  setStatus('s3', 'done', '✅ 相場調査完了');
+  document.getElementById('marketMetrics').innerHTML = `
+    <div class="metric highlight"><div class="metric-label">推奨料金</div><div class="metric-value">${d.recommended_rate||'—'}<span class="metric-unit"> 円/30分</span></div></div>
+    <div class="metric"><div class="metric-label">時間換算</div><div class="metric-value">${(d.recommended_rate||0)*2}<span class="metric-unit"> 円/h</span></div></div>
+    <div class="metric"><div class="metric-label">競合（500m圏）</div><div class="metric-value">${d.competitors_500m||'—'}<span class="metric-unit"> 箇所</span></div></div>
+    <div class="metric"><div class="metric-label">需要レベル</div><div class="metric-value" style="font-size:16px">${d.demand_level||'—'}</div></div>
+  `;
+  document.getElementById('marketSummary').innerHTML = `<div class="evidence-title">📍 市場評価</div>${d.market_summary||''}`;
+  document.getElementById('rateTable').innerHTML = `
+    <tr><td>平日昼間</td><td>${d.weekday_day?.min||'—'}〜${d.weekday_day?.max||'—'} 円/30分</td></tr>
+    <tr><td>平日夜間</td><td>${d.weekday_night?.min||'—'}〜${d.weekday_night?.max||'—'} 円/30分</td></tr>
+    <tr><td>休日昼間</td><td>${d.holiday_day?.min||'—'}〜${d.holiday_day?.max||'—'} 円/30分</td></tr>
+  `;
+  const slider = document.getElementById('rateSlider');
+  const display = document.getElementById('rateDisplay');
+  slider.value = d.recommended_rate || 200;
+  display.textContent = slider.value + '円';
+  slider.oninput = () => { display.textContent = slider.value + '円'; };
+  state.completedSteps.add(3);
+}
+
+// ---- STEP 4: 収支試算 ----
+async function runFinance() {
+  goStep(4);
+  setStatus('s4', 'running', '収支を計算中...');
+  setProgress('s4', 20);
+  const d = state.analysisData || {};
+  const rate = parseInt(document.getElementById('rateSlider').value) || (state.marketData?.recommended_rate || 200);
+  try {
+    const res = await apiPost('/api/finance', {
+      slots: d.slots_recommended || 8, rate,
+      address: document.getElementById('address').value || '東京都内'
+    });
+    setProgress('s4', 100);
+    if (res.success) { renderFinance(res.data); document.getElementById('btnProposal').disabled = false; }
+    else throw new Error(res.error);
+  } catch(e) { setStatus('s4', 'error', '❌ ' + e.message); }
+}
+
+function renderFinance(d) {
+  state.financeData = d;
+  document.getElementById('financeResult').style.display = 'block';
+  setStatus('s4', 'done', '✅ 試算完了');
+  document.getElementById('profitMain').textContent = (d.monthly_profit||0).toLocaleString() + ' 円';
+  document.getElementById('profitYear').textContent = (d.annual_profit||0).toLocaleString() + ' 円';
+  const rows = [
+    {label:'駐車料金収入', m:d.monthly_revenue, cls:'pos'},
+    {label:'管理費・清掃', m:-d.monthly_mgmt, cls:'neg'},
+    {label:'機器リース・保守', m:-d.monthly_lease, cls:'neg'},
+    {label:'電気代', m:-d.monthly_electric, cls:'neg'},
+    {label:'固定資産税等', m:-d.monthly_tax, cls:'neg'},
+    {label:'月間純利益', m:d.monthly_profit, cls: d.monthly_profit>=0?'pos':'neg'},
+  ];
+  document.getElementById('financeBody').innerHTML = rows.map(r =>
+    `<tr><td>${r.label}</td><td class="${r.cls}" style="text-align:right">${(r.m||0).toLocaleString()}円</td><td class="${r.cls}" style="text-align:right">${((r.m||0)*12).toLocaleString()}円</td></tr>`
+  ).join('');
+  document.getElementById('financeMetrics').innerHTML = `
+    <div class="metric"><div class="metric-label">初期投資目安</div><div class="metric-value">${Math.round((d.initial_investment||0)/10000)}<span class="metric-unit"> 万円</span></div></div>
+    <div class="metric"><div class="metric-label">回収期間</div><div class="metric-value">${d.payback_months||'—'}<span class="metric-unit"> ヶ月</span></div></div>
+    <div class="metric highlight"><div class="metric-label">表面利回り</div><div class="metric-value">${d.yield_rate||'—'}<span class="metric-unit"> %</span></div></div>
+  `;
+  if (d.comment) document.getElementById('financeComment').innerHTML = `<div class="evidence-title">💡 ポイント</div>${d.comment}`;
+  state.completedSteps.add(4);
+}
+
+// ---- STEP 5: 提案資料 ----
+async function runProposal() {
+  goStep(5);
+  setStatus('s5', 'running', '提案資料を生成中...');
+  setProgress('s5', 20);
+  const an = state.analysisData || {};
+  const fd = state.financeData || {};
+  const mk = state.marketData || {};
+  try {
+    const res = await apiPost('/api/proposal', {
+      address: document.getElementById('address').value || '東京都内',
+      area: an.area_total || 300, slots: an.slots_recommended || 8,
+      rate: parseInt(document.getElementById('rateSlider')?.value) || mk.recommended_rate || 200,
+      monthly_profit: fd.monthly_profit || 0, annual_profit: fd.annual_profit || 0,
+      yield_rate: fd.yield_rate || 0, payback_months: fd.payback_months || 0
+    });
+    setProgress('s5', 100);
+    if (res.success) { renderProposal(res.data); }
+    else throw new Error(res.error);
+  } catch(e) { setStatus('s5', 'error', '❌ ' + e.message); }
+}
+
+function renderProposal(d) {
+  document.getElementById('proposalResult').style.display = 'block';
+  setStatus('s5', 'done', '✅ 提案資料完成');
+  const icons = ['📋','🔍','💡','🗺','📊','💹','🎯'];
+  document.getElementById('slideGrid').innerHTML = (d.slides||[]).map((s,i) => `
+    <div class="slide-card">
+      <div class="slide-num">SLIDE ${s.num}</div>
+      <div class="slide-title">${icons[i]||'📄'} ${s.title}</div>
+      ${s.headline ? `<div class="slide-headline">${s.headline}</div>` : ''}
+      <div class="slide-body">${s.body||''}</div>
+      ${s.key_numbers?.length ? `<div class="slide-numbers">${s.key_numbers.map(n=>`<span class="slide-num-badge">${n}</span>`).join('')}</div>` : ''}
+    </div>`).join('');
+  state.completedSteps.add(5);
+}
+
+// ---- ステッパー制御 ----
+function goStep(n) {
+  document.getElementById('step' + state.currentStep).classList.remove('active');
+  state.currentStep = n;
+  document.getElementById('step' + n).classList.add('active');
+  updateStepper();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function tryGoStep(n) {
+  if (n <= state.currentStep || state.completedSteps.has(n-1) || n === 1) goStep(n);
+}
+
+function updateStepper() {
+  for (let i = 1; i <= 5; i++) {
+    const sc = document.getElementById('sc' + i), sl = document.getElementById('sl' + i);
+    sc.classList.remove('active','done'); sl.classList.remove('active');
+    if (i < state.currentStep) { sc.classList.add('done'); sc.textContent = '✓'; }
+    else if (i === state.currentStep) { sc.classList.add('active'); sc.textContent = i; sl.classList.add('active'); }
+    else { sc.textContent = i; }
+    if (i < 5) document.getElementById('conn'+i).classList.toggle('done', i < state.currentStep);
+  }
+}
+
+function switchTab(name, el, prefix) {
+  const tabs = el.parentElement.querySelectorAll('.tab');
+  tabs.forEach(t => t.classList.remove('active')); el.classList.add('active');
+  const map = { summary: prefix+'TabSummary', detail: prefix+'TabDetail', check: prefix+'TabCheck' };
+  Object.values(map).forEach(id => { const e=document.getElementById(id); if(e) e.style.display='none'; });
+  const target = document.getElementById(map[name]);
+  if (target) target.style.display = 'block';
+}
+
+function resetAll() {
+  state = { currentStep: 1, completedSteps: new Set(), analysisData: null, marketData: null, financeData: null };
+  goStep(1);
+  document.getElementById('analysisResult').style.display = 'none';
+  document.getElementById('s1bar').style.display = 'none';
+}
+</script>
+</body>
+</html>
